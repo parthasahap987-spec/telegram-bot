@@ -1,5 +1,6 @@
 import logging
 import requests
+import re
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
@@ -20,11 +21,19 @@ def make_affiliate(url):
     else:
         return url + "?tag=" + AFFILIATE_TAG
 
-# 📦 Scraper
+# 🔄 Short link expand (amzn.to)
+def expand_url(url):
+    try:
+        r = requests.get(url, allow_redirects=True, timeout=10)
+        return r.url
+    except:
+        return url
+
+# 📦 Scrape Amazon
 def get_data(url):
     headers = {"User-Agent": "Mozilla/5.0"}
 
-    r = requests.get(url, headers=headers)
+    r = requests.get(url, headers=headers, timeout=10)
     soup = BeautifulSoup(r.text, "html.parser")
 
     # 💰 Price
@@ -43,32 +52,51 @@ def get_data(url):
 
 # 🤖 Handler
 def handle(update: Update, context: CallbackContext):
-    url = update.message.text
+    text = update.message.text
 
-    if "amazon" not in url:
-        update.message.reply_text("❌ Send Amazon link only")
+    # 🔍 Extract URL from any text
+    urls = re.findall(r'https?://\S+', text)
+    if not urls:
+        update.message.reply_text("❌ Send Amazon link")
         return
 
-    price, discount, img = get_data(url)
+    url = urls[0]
+
+    # 🔄 Expand short link
+    if "amzn.to" in url:
+        url = expand_url(url)
+
+    # 🔗 Affiliate link
     aff = make_affiliate(url)
 
-    caption = f"""💰 ₹{price}
+    try:
+        price, discount, img = get_data(url)
+
+        caption = f"""💰 ₹{price}
 🔥 {discount}
 
 👉 Buy Now: {aff}"""
 
-    try:
         if img:
-            context.bot.send_photo(CHANNEL_ID, img, caption=caption)
+            context.bot.send_photo(
+                chat_id=CHANNEL_ID,
+                photo=img,
+                caption=caption,
+                disable_web_page_preview=True
+            )
         else:
-            context.bot.send_message(CHANNEL_ID, caption)
+            context.bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=caption,
+                disable_web_page_preview=True
+            )
 
         update.message.reply_text("✅ Posted")
 
     except Exception as e:
-        update.message.reply_text(f"Error: {e}")
+        update.message.reply_text(f"❌ Error: {e}")
 
-# 🚀 Run
+# 🚀 Run bot
 def main():
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
