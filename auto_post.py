@@ -1,8 +1,8 @@
 import re
-import requests
-from bs4 import BeautifulSoup
+import asyncio
 from telegram import Bot
 from telegram.ext import Updater, MessageHandler, Filters
+from playwright.async_api import async_playwright
 
 BOT_TOKEN = "8659070537:AAG-O3aN5rGAdtnkINkn3eaoTlkrs8CO2NI"
 CHANNEL = -1002161382456
@@ -10,6 +10,7 @@ AFFILIATE_TAG = "partha07e-21"
 
 bot = Bot(token=BOT_TOKEN)
 
+# 🔥 Affiliate link add
 def add_tag(url):
     if "amazon" in url:
         if "?" in url:
@@ -18,38 +19,29 @@ def add_tag(url):
             return url + "?tag=" + AFFILIATE_TAG
     return url
 
-def get_data(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept-Language": "en-US,en;q=0.9"
-    }
+# 🔥 Screenshot function
+async def take_screenshot(url):
+    async with async_playwright() as p:
+        browser = await p.chromium.launch()
+        page = await browser.new_page(viewport={"width": 1080, "height": 1920})
 
-    r = requests.get(url, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
+        await page.goto(url)
+        await page.wait_for_timeout(6000)
 
-    # Price
-    price = "Check"
-    tag = soup.select_one(".a-price .a-offscreen")
-    if tag:
-        price = tag.get_text().replace("₹", "").strip()
+        # 🔥 product section crop
+        element = await page.query_selector("#centerCol")
 
-    # Discount
-    discount = "Offer"
-    tag = soup.select_one(".savingsPercentage")
-    if tag:
-        discount = tag.get_text().strip()
+        path = "product.png"
 
-    # Image
-    img = None
-    tag = soup.find("img", {"id": "landingImage"})
-    if tag:
-        img = tag.get("src")
+        if element:
+            await element.screenshot(path=path)
+        else:
+            await page.screenshot(path=path)
 
-    if img and not img.startswith("http"):
-        img = None
+        await browser.close()
+        return path
 
-    return price, discount, img
-
+# 🔥 Main handler
 def handle(update, context):
     text = update.message.text
     links = re.findall(r'https?://\S+', text)
@@ -60,22 +52,24 @@ def handle(update, context):
     url = links[0]
     aff_link = add_tag(url)
 
-    price, discount, img = get_data(url)
+    # 🔥 screenshot
+    path = asyncio.run(take_screenshot(url))
 
-    caption = "💰 ₹" + price + "\n🏷️ " + discount + "\n" + aff_link
-    caption = caption[:1000]
+    caption = f"🛒 Buy Now:\n{aff_link}"
 
     try:
-        if img:
-            bot.send_photo(chat_id=CHANNEL, photo=img, caption=caption)
-        else:
-            bot.send_message(chat_id=CHANNEL, text=caption, disable_web_page_preview=True)
+        bot.send_photo(
+            chat_id=CHANNEL,
+            photo=open(path, "rb"),
+            caption=caption
+        )
 
-        update.message.reply_text("✅ Done")
+        update.message.reply_text("✅ Screenshot Posted!")
 
     except Exception as e:
-        update.message.reply_text(str(e))
+        update.message.reply_text(f"❌ Error: {e}")
 
+# 🚀 Run bot
 updater = Updater(BOT_TOKEN, use_context=True)
 dp = updater.dispatcher
 dp.add_handler(MessageHandler(Filters.text, handle))
