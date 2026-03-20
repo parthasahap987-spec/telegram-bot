@@ -1,17 +1,14 @@
 import re
 import requests
-from bs4 import BeautifulSoup
-from telegram import Bot, Update
+from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
 # 🔑 CONFIG
-BOT_TOKEN = "8292452202:AAFu7Q5ztLK03OdyQkFsKpt1zsWmaMd5jvw"
+BOT_TOKEN = "8799971120:AAHlHlFBghuS73mBBaUI27PA1Ih45f1NhCw"
 CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
-bot = Bot(token=BOT_TOKEN)
-
-# 🔗 Affiliate link add
+# 🔗 Affiliate add
 def add_tag(url):
     if "tag=" in url:
         return url
@@ -27,95 +24,65 @@ def expand_url(url):
     except:
         return url
 
-# 📦 Scraper (FIXED)
-def get_data(url):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10)",
-        "Accept-Language": "en-US,en;q=0.9"
-    }
-
-    try:
-        r = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        # 💰 PRICE
-        price = "Check"
-        tag = soup.select_one(".a-price-whole")
-        if tag:
-            price = tag.get_text().strip()
-
-        # 🔥 DISCOUNT
-        discount = "Offer"
-        tag = soup.select_one(".savingsPercentage")
-        if tag:
-            discount = tag.get_text().strip()
-
-        # 🖼 IMAGE
-        img = None
-        tag = soup.find("img", {"id": "landingImage"})
-        if tag:
-            img = tag.get("src")
-
-        return price, discount, img
-
-    except Exception as e:
-        print(e)
-        return "Check", "Offer", None
-
-# 🤖 MAIN HANDLER
+# 🤖 HANDLER
 def handle(update: Update, context: CallbackContext):
-    text = update.message.text
+    msg = update.message
 
-    links = re.findall(r'https?://\S+', text)
-    if not links:
-        update.message.reply_text("❌ Send Amazon link")
+    # 👉 caption বা text ধরো
+    text = msg.caption if msg.caption else msg.text
+    if not text:
+        msg.reply_text("❌ No text found")
         return
 
-    url = links[0]
+    # 🔍 link detect
+    links = re.findall(r'https?://\S+', text)
+    if not links:
+        msg.reply_text("❌ No link found")
+        return
 
-    # 🔄 Short link support
-    if "amzn.to" in url:
-        url = expand_url(url)
+    original_link = links[0]
 
-    # 🔗 Affiliate add
-    aff_link = add_tag(url)
+    # 🔄 expand short link
+    if "amzn.to" in original_link:
+        original_link = expand_url(original_link)
+
+    # 🔗 affiliate বানাও
+    aff_link = add_tag(original_link)
+
+    # 🔁 replace link
+    new_text = text.replace(links[0], aff_link)
 
     try:
-        price, discount, img = get_data(url)
+        # 📸 যদি image থাকে
+        if msg.photo:
+            photo = msg.photo[-1].file_id
 
-        caption = f"""💰 Price: ₹{price}
-🔥 Discount: {discount}
-
-👉 Buy Now:
-{aff_link}
-"""
-
-        # 📸 Send post
-        if img:
             context.bot.send_photo(
                 chat_id=CHANNEL_ID,
-                photo=img,
-                caption=caption,
+                photo=photo,
+                caption=new_text,
                 disable_web_page_preview=True
             )
+
+        # 📄 যদি শুধু text হয়
         else:
             context.bot.send_message(
                 chat_id=CHANNEL_ID,
-                text=caption,
+                text=new_text,
                 disable_web_page_preview=True
             )
 
-        update.message.reply_text("✅ Posted")
+        msg.reply_text("✅ Posted with affiliate link")
 
     except Exception as e:
-        update.message.reply_text(f"❌ Error: {e}")
+        msg.reply_text(f"❌ Error: {e}")
 
 # 🚀 RUN
 def main():
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle))
+    dp.add_handler(MessageHandler(Filters.all, handle))
 
     print("Bot Running 🚀")
     updater.start_polling()
