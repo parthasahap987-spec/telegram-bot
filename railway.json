@@ -4,6 +4,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "python auto_post.py"
+    "startCommand": "pip install -r requirements.txt && playwright install && python auto_post.py"
   }
 }
