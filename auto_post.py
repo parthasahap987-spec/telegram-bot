@@ -4,7 +4,7 @@ from telegram import Bot
 from telegram.ext import Updater, MessageHandler, Filters
 from playwright.async_api import async_playwright
 
-BOT_TOKEN = "8659070537:AAG-O3aN5rGAdtnkINkn3eaoTlkrs8CO2NI"
+BOT_TOKEN = "8770723867:AAHUi2zo7O-I4nF-uLl_1i0Cy6_aj9dWH_I"
 CHANNEL = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
