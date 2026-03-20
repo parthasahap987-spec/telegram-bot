@@ -8,16 +8,16 @@ BOT_TOKEN = "8798520446:AAGIWH8Cli7c-l2nc_dbG3mgn70BUYNmmUY"
 CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
-# 🔗 Affiliate add
-def add_tag(url):
-    if "tag=" in url:
+# 🔗 make clean affiliate link (NO EXTRA TAG)
+def make_affiliate(url):
+    try:
+        # remove all params
+        base = url.split("?")[0]
+        return base + "?tag=" + AFFILIATE_TAG
+    except:
         return url
-    if "?" in url:
-        return url + "&tag=" + AFFILIATE_TAG
-    else:
-        return url + "?tag=" + AFFILIATE_TAG
 
-# 🔄 Short link expand
+# 🔄 expand short link
 def expand_url(url):
     try:
         return requests.get(url, allow_redirects=True, timeout=10).url
@@ -28,51 +28,51 @@ def expand_url(url):
 def handle(update: Update, context: CallbackContext):
     msg = update.message
 
-    # 👉 caption বা text ধরো
     text = msg.caption if msg.caption else msg.text
     if not text:
-        msg.reply_text("❌ No text found")
+        msg.reply_text("❌ No text")
         return
 
-    # 🔍 link detect
-    links = re.findall(r'https?://\S+', text)
+    # 🔍 সব link detect
+    links = re.findall(r'https?://[^\s]+', text)
+
     if not links:
         msg.reply_text("❌ No link found")
         return
 
+    # 👉 প্রথম link use করবো
     original_link = links[0]
 
-    # 🔄 expand short link
+    # 🔄 short link expand
     if "amzn.to" in original_link:
         original_link = expand_url(original_link)
 
-    # 🔗 affiliate বানাও
-    aff_link = add_tag(original_link)
+    # 🔗 final affiliate link
+    aff_link = make_affiliate(original_link)
 
-    # 🔁 replace link
-    new_text = text.replace(links[0], aff_link)
+    # ❌ সব link remove
+    clean_text = re.sub(r'https?://[^\s]+', '', text).strip()
+
+    # ➕ শেষে নিজের link add
+    final_text = f"{clean_text}\n\n👉 Buy Now:\n{aff_link}"
 
     try:
-        # 📸 যদি image থাকে
+        # 📸 image থাকলে
         if msg.photo:
-            photo = msg.photo[-1].file_id
-
             context.bot.send_photo(
                 chat_id=CHANNEL_ID,
-                photo=photo,
-                caption=new_text,
+                photo=msg.photo[-1].file_id,
+                caption=final_text,
                 disable_web_page_preview=True
             )
-
-        # 📄 যদি শুধু text হয়
         else:
             context.bot.send_message(
                 chat_id=CHANNEL_ID,
-                text=new_text,
+                text=final_text,
                 disable_web_page_preview=True
             )
 
-        msg.reply_text("✅ Posted with affiliate link")
+        msg.reply_text("✅ Done (Only your affiliate link added)")
 
     except Exception as e:
         msg.reply_text(f"❌ Error: {e}")
