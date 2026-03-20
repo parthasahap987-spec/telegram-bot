@@ -1,79 +1,97 @@
-import re
-import asyncio
-from telegram import Bot
-from telegram.ext import Updater, MessageHandler, Filters
-from playwright.async_api import async_playwright
+import logging
+import requests
+from bs4 import BeautifulSoup
+from telegram import Update
+from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
+# 🔑 CONFIG
 BOT_TOKEN = "8770723867:AAHUi2zo7O-I4nF-uLl_1i0Cy6_aj9dWH_I"
-CHANNEL = -1002161382456
+CHANNEL_ID = -1002161382456   # তোমার channel id
 AFFILIATE_TAG = "partha07e-21"
 
-bot = Bot(token=BOT_TOKEN)
+logging.basicConfig(level=logging.INFO)
 
-# 🔥 Affiliate link add
-def add_tag(url):
-    if "amazon" in url:
-        if "?" in url:
-            return url + "&tag=" + AFFILIATE_TAG
-        else:
-            return url + "?tag=" + AFFILIATE_TAG
-    return url
+# 🔗 Affiliate link function
+def make_affiliate(url):
+    if "tag=" in url:
+        return url
+    if "?" in url:
+        return url + "&tag=" + AFFILIATE_TAG
+    else:
+        return url + "?tag=" + AFFILIATE_TAG
 
-# 🔥 Screenshot function
-async def take_screenshot(url):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch()
-        page = await browser.new_page(viewport={"width": 1080, "height": 1920})
-
-        await page.goto(url)
-        await page.wait_for_timeout(6000)
-
-        # 🔥 product section crop
-        element = await page.query_selector("#centerCol")
-
-        path = "product.png"
-
-        if element:
-            await element.screenshot(path=path)
-        else:
-            await page.screenshot(path=path)
-
-        await browser.close()
-        return path
-
-# 🔥 Main handler
-def handle(update, context):
-    text = update.message.text
-    links = re.findall(r'https?://\S+', text)
-
-    if not links:
-        return
-
-    url = links[0]
-    aff_link = add_tag(url)
-
-    # 🔥 screenshot
-    path = asyncio.run(take_screenshot(url))
-
-    caption = f"🛒 Buy Now:\n{aff_link}"
+# 📦 Scrape Amazon data
+def get_product_data(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
 
     try:
-        bot.send_photo(
-            chat_id=CHANNEL,
-            photo=open(path, "rb"),
-            caption=caption
-        )
+        r = requests.get(url, headers=headers)
+        soup = BeautifulSoup(r.text, "html.parser")
 
-        update.message.reply_text("✅ Screenshot Posted!")
+        # 💰 Price
+        price = soup.select_one(".a-price-whole")
+        price = price.text.strip() if price else "N/A"
+
+        # 🔥 Discount
+        discount = soup.select_one(".savingsPercentage")
+        discount = discount.text.strip() if discount else "N/A"
+
+        # 🖼️ Image
+        img = soup.find("img", {"id": "landingImage"})
+        img_url = img["src"] if img else None
+
+        return price, discount, img_url
+
+    except Exception as e:
+        print(e)
+        return "N/A", "N/A", None
+
+# 🤖 Handle message
+def handle(update: Update, context: CallbackContext):
+    text = update.message.text
+
+    if "amazon" not in text:
+        update.message.reply_text("❌ Send Amazon link only")
+        return
+
+    price, discount, img = get_product_data(text)
+    aff_link = make_affiliate(text)
+
+    caption = f"""💰 ₹{price}
+🔥 {discount}
+
+👉 Buy Now: {aff_link}"""
+
+    try:
+        if img:
+            context.bot.send_photo(
+                chat_id=CHANNEL_ID,
+                photo=img,
+                caption=caption
+            )
+        else:
+            context.bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=caption
+            )
+
+        update.message.reply_text("✅ Posted to channel")
 
     except Exception as e:
         update.message.reply_text(f"❌ Error: {e}")
 
-# 🚀 Run bot
-updater = Updater(BOT_TOKEN, use_context=True)
-dp = updater.dispatcher
-dp.add_handler(MessageHandler(Filters.text, handle))
+# 🚀 Main run
+def main():
+    updater = Updater(BOT_TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-print("Bot Running 🚀")
-updater.start_polling()
-updater.idle()
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle))
+
+    print("Bot Running 🚀")
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
