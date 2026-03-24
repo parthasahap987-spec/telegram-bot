@@ -1,17 +1,15 @@
 import re
 import requests
 from telegram import Update
-from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-# 🔑 CONFIG
 BOT_TOKEN = "8645119625:AAFyZsv5UHsKSmoWk3oDsD-Umzh44fZS5kw"
 CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
-# 🔗 make clean affiliate link (NO EXTRA TAG)
+# 🔗 affiliate link
 def make_affiliate(url):
     try:
-        # remove all params
         base = url.split("?")[0]
         return base + "?tag=" + AFFILIATE_TAG
     except:
@@ -24,69 +22,96 @@ def expand_url(url):
     except:
         return url
 
-# 🤖 HANDLER
-def handle(update: Update, context: CallbackContext):
+# 🖼️ Amazon product image extract
+def get_amazon_image(url):
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        r = requests.get(url, headers=headers, timeout=10)
+        html = r.text
+
+        # og:image meta tag extract
+        match = re.search(r'<meta property="og:image" content="([^"]+)"', html)
+        if match:
+            return match.group(1)
+
+    except:
+        return None
+
+    return None
+
+# 🤖 handler
+async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
 
     text = msg.caption if msg.caption else msg.text
     if not text:
-        msg.reply_text("❌ No text")
         return
 
-    # 🔍 সব link detect
     links = re.findall(r'https?://[^\s]+', text)
 
     if not links:
-        msg.reply_text("❌ No link found")
         return
 
-    # 👉 প্রথম link use করবো
-    original_link = links[0]
+    final_links = []
+    image_url = None
 
-    # 🔄 short link expand
-    if "amzn.to" in original_link:
-        original_link = expand_url(original_link)
+    for link in links:
 
-    # 🔗 final affiliate link
-    aff_link = make_affiliate(original_link)
+        if "amazon" in link or "amzn.to" in link:
 
-    # ❌ সব link remove
+            if "amzn.to" in link:
+                link = expand_url(link)
+
+            aff = make_affiliate(link)
+            final_links.append(aff)
+
+            # 👉 প্রথম link থেকে image আনবো (if needed)
+            if not image_url:
+                image_url = get_amazon_image(link)
+
+    if not final_links:
+        return
+
     clean_text = re.sub(r'https?://[^\s]+', '', text).strip()
+    links_text = "\n".join(final_links)
 
-    # ➕ শেষে নিজের link add
-    final_text = f"{clean_text}\n\n👉 Buy Now:\n{aff_link}"
+    final_text = f"{clean_text}\n\n👉 Buy Now:\n{links_text}"
 
     try:
-        # 📸 image থাকলে
+        # 📸 Case 1: original image থাকলে সেটাই use
         if msg.photo:
-            context.bot.send_photo(
+            await context.bot.send_photo(
                 chat_id=CHANNEL_ID,
                 photo=msg.photo[-1].file_id,
                 caption=final_text,
                 disable_web_page_preview=True
             )
+
+        # 📸 Case 2: image নাই → Amazon থেকে image আনবো
+        elif image_url:
+            await context.bot.send_photo(
+                chat_id=CHANNEL_ID,
+                photo=image_url,
+                caption=final_text,
+                disable_web_page_preview=True
+            )
+
+        # ❌ fallback → text only
         else:
-            context.bot.send_message(
+            await context.bot.send_message(
                 chat_id=CHANNEL_ID,
                 text=final_text,
                 disable_web_page_preview=True
             )
 
-        msg.reply_text("✅ Done (Only your affiliate link added)")
-
     except Exception as e:
-        msg.reply_text(f"❌ Error: {e}")
+        print("Error:", e)
 
-# 🚀 RUN
-def main():
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+# 🚀 run
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(MessageHandler(filters.ALL, handle))
 
-    dp.add_handler(MessageHandler(Filters.all, handle))
-
-    print("Bot Running 🚀")
-    updater.start_polling()
-    updater.idle()
-
-if __name__ == "__main__":
-    main()
+print("Bot Running 🚀")
+app.run_polling()
