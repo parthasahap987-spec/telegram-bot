@@ -3,12 +3,10 @@ import requests
 from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
-# 🔑 CONFIG
 BOT_TOKEN = "8645119625:AAHLcrsVzJzaBwsSRAO3OIoXFlUAVwnrmr8"
 CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
-# 🔗 affiliate link clean
 def make_affiliate(url):
     try:
         base = url.split("?")[0]
@@ -16,27 +14,11 @@ def make_affiliate(url):
     except:
         return url
 
-# 🔄 expand short link
 def expand_url(url):
     try:
         return requests.get(url, allow_redirects=True, timeout=10).url
     except:
         return url
-
-# 🖼️ Amazon image fetch
-def get_amazon_image(url):
-    try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get(url, headers=headers, timeout=10)
-        html = r.text
-
-        match = re.search(r'<meta property="og:image" content="([^"]+)"', html)
-        if match:
-            return match.group(1)
-    except:
-        return None
-
-    return None
 
 # 🤖 HANDLER
 def handle(update: Update, context: CallbackContext):
@@ -46,61 +28,36 @@ def handle(update: Update, context: CallbackContext):
     if not text:
         return
 
-    links = re.findall(r'https?://[^\s]+', text)
+    # 🔁 function for replacing each link
+    def replace_link(match):
+        link = match.group(0)
 
-    if not links:
-        return
-
-    final_links = []
-    image_url = None
-
-    for link in links:
-
-        # 👉 only Amazon link
+        # 👉 only Amazon
         if "amazon" in link or "amzn.to" in link:
 
             if "amzn.to" in link:
                 link = expand_url(link)
 
-            aff = make_affiliate(link)
-            final_links.append(aff)
+            return make_affiliate(link)
 
-            # 👉 first link থেকে image নেবো
-            if not image_url:
-                image_url = get_amazon_image(link)
+        return link  # অন্য link untouched থাকবে
 
-    if not final_links:
-        return
-
-    clean_text = re.sub(r'https?://[^\s]+', '', text).strip()
-    links_text = "\n".join(final_links)
-
-    final_text = f"{clean_text}\n\n👉 Buy Now:\n{links_text}"
+    # 🔄 inline replace
+    new_text = re.sub(r'https?://[^\s]+', replace_link, text)
 
     try:
-        # 📸 case 1: original image থাকলে
+        # 📸 image থাকলে
         if msg.photo:
             context.bot.send_photo(
                 chat_id=CHANNEL_ID,
                 photo=msg.photo[-1].file_id,
-                caption=final_text,
+                caption=new_text,
                 disable_web_page_preview=True
             )
-
-        # 📸 case 2: image নাই → Amazon থেকে আনবে
-        elif image_url:
-            context.bot.send_photo(
-                chat_id=CHANNEL_ID,
-                photo=image_url,
-                caption=final_text,
-                disable_web_page_preview=True
-            )
-
-        # ❌ fallback
         else:
             context.bot.send_message(
                 chat_id=CHANNEL_ID,
-                text=final_text,
+                text=new_text,
                 disable_web_page_preview=True
             )
 
@@ -118,6 +75,5 @@ def main():
     updater.start_polling()
     updater.idle()
 
-# ✅ FIXED LINE (IMPORTANT)
 if __name__ == "__main__":
     main()
