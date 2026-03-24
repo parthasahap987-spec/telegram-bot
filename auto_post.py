@@ -4,14 +4,13 @@ from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
 # 🔑 CONFIG
-BOT_TOKEN = "8645119625:AAFyZsv5UHsKSmoWk3oDsD-Umzh44fZS5kw"
+BOT_TOKEN = "YOUR_NEW_BOT_TOKEN"
 CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
-# 🔗 make clean affiliate link (NO EXTRA TAG)
+# 🔗 affiliate link clean
 def make_affiliate(url):
     try:
-        # remove all params
         base = url.split("?")[0]
         return base + "?tag=" + AFFILIATE_TAG
     except:
@@ -24,40 +23,62 @@ def expand_url(url):
     except:
         return url
 
+# 🖼️ Amazon image fetch
+def get_amazon_image(url):
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        r = requests.get(url, headers=headers, timeout=10)
+        html = r.text
+
+        match = re.search(r'<meta property="og:image" content="([^"]+)"', html)
+        if match:
+            return match.group(1)
+    except:
+        return None
+
+    return None
+
 # 🤖 HANDLER
 def handle(update: Update, context: CallbackContext):
     msg = update.message
 
     text = msg.caption if msg.caption else msg.text
     if not text:
-        msg.reply_text("❌ No text")
         return
 
-    # 🔍 সব link detect
     links = re.findall(r'https?://[^\s]+', text)
 
     if not links:
-        msg.reply_text("❌ No link found")
         return
 
-    # 👉 প্রথম link use করবো
-    original_link = links[0]
+    final_links = []
+    image_url = None
 
-    # 🔄 short link expand
-    if "amzn.to" in original_link:
-        original_link = expand_url(original_link)
+    for link in links:
 
-    # 🔗 final affiliate link
-    aff_link = make_affiliate(original_link)
+        # 👉 only Amazon link
+        if "amazon" in link or "amzn.to" in link:
 
-    # ❌ সব link remove
+            if "amzn.to" in link:
+                link = expand_url(link)
+
+            aff = make_affiliate(link)
+            final_links.append(aff)
+
+            # 👉 first link থেকে image নেবো
+            if not image_url:
+                image_url = get_amazon_image(link)
+
+    if not final_links:
+        return
+
     clean_text = re.sub(r'https?://[^\s]+', '', text).strip()
+    links_text = "\n".join(final_links)
 
-    # ➕ শেষে নিজের link add
-    final_text = f"{clean_text}\n\n👉 Buy Now:\n{aff_link}"
+    final_text = f"{clean_text}\n\n👉 Buy Now:\n{links_text}"
 
     try:
-        # 📸 image থাকলে
+        # 📸 case 1: original image থাকলে
         if msg.photo:
             context.bot.send_photo(
                 chat_id=CHANNEL_ID,
@@ -65,6 +86,17 @@ def handle(update: Update, context: CallbackContext):
                 caption=final_text,
                 disable_web_page_preview=True
             )
+
+        # 📸 case 2: image নাই → Amazon থেকে আনবে
+        elif image_url:
+            context.bot.send_photo(
+                chat_id=CHANNEL_ID,
+                photo=image_url,
+                caption=final_text,
+                disable_web_page_preview=True
+            )
+
+        # ❌ fallback
         else:
             context.bot.send_message(
                 chat_id=CHANNEL_ID,
@@ -72,10 +104,8 @@ def handle(update: Update, context: CallbackContext):
                 disable_web_page_preview=True
             )
 
-        msg.reply_text("✅ Done (Only your affiliate link added)")
-
     except Exception as e:
-        msg.reply_text(f"❌ Error: {e}")
+        print("Error:", e)
 
 # 🚀 RUN
 def main():
@@ -88,5 +118,6 @@ def main():
     updater.start_polling()
     updater.idle()
 
-if name == "main":
+# ✅ FIXED LINE (IMPORTANT)
+if __name__ == "__main__":
     main()
