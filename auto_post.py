@@ -8,7 +8,7 @@ CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
 
-# 🔁 Strong short link expand (ALL TYPES)
+# 🔁 Expand ANY short link
 def expand_url(url):
     try:
         session = requests.Session()
@@ -18,22 +18,22 @@ def expand_url(url):
 
         res = session.get(url, allow_redirects=True, timeout=10)
         return res.url
-
     except:
         return url
 
 
-# 🔗 Clean affiliate link
+# 🔗 PERFECT CLEAN AMAZON LINK
 def make_affiliate(url):
     try:
-        url = re.sub(r'([&?])tag=[^&]+', '', url)
-        url = re.sub(r'([&?])(ref|psc|smid|linkCode|th)=[^&]+', '', url)
-        url = url.rstrip("?&")
+        # 🔥 dp/ASIN clean extract
+        match = re.search(r'(https://www\.amazon\.[^/]+/dp/[A-Z0-9]+)', url)
 
-        if "?" in url:
-            return url + "&tag=" + AFFILIATE_TAG
+        if match:
+            clean_url = match.group(1)
         else:
-            return url + "?tag=" + AFFILIATE_TAG
+            clean_url = url.split("?")[0]
+
+        return clean_url + "?tag=" + AFFILIATE_TAG
 
     except:
         return url
@@ -62,7 +62,7 @@ def get_amazon_image(url):
     return None
 
 
-# 🤖 AUTO FORMAT
+# 🤖 AUTO FORMAT SYSTEM
 def format_post(text, affiliate_link):
     lines = text.split("\n")
 
@@ -111,7 +111,7 @@ def format_post(text, affiliate_link):
     return final[:1000]
 
 
-# 🤖 MAIN
+# 🤖 MAIN HANDLER
 def handle(update: Update, context: CallbackContext):
     msg = update.message
     text = msg.caption if msg.caption else msg.text
@@ -124,10 +124,10 @@ def handle(update: Update, context: CallbackContext):
     def replace_link(match):
         link = match.group(0)
 
-        # 🔥 ALL Amazon / short link detect
+        # 🔥 detect ALL amazon + short links
         if any(x in link for x in ["amazon.", "amzn"]):
 
-            # 🔁 expand any short link
+            # 🔁 expand short link
             if "amzn" in link:
                 link = expand_url(link)
 
@@ -142,12 +142,12 @@ def handle(update: Update, context: CallbackContext):
     try:
         affiliate_link = found_links[0] if found_links else ""
 
-        # 🔥 AUTO FORMAT POST
+        # 🔥 formatted post
         final_post = format_post(new_text, affiliate_link)
 
         image_sent = False
 
-        # ✅ image + caption same post
+        # ✅ same post image + caption
         if msg.photo:
             context.bot.send_photo(
                 chat_id=CHANNEL_ID,
@@ -157,7 +157,7 @@ def handle(update: Update, context: CallbackContext):
             )
             image_sent = True
 
-        # ✅ Amazon image auto fetch
+        # ✅ amazon image auto
         if not image_sent:
             for link in found_links:
                 img = get_amazon_image(link)
@@ -183,7 +183,7 @@ def handle(update: Update, context: CallbackContext):
         print("Error:", e)
 
 
-# 🚀 RUN
+# 🚀 RUN BOT
 def main():
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
