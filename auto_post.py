@@ -95,43 +95,50 @@ def handle(update: Update, context: CallbackContext):
     new_text = re.sub(r'https?://[^\s]+', replace_link, text)
 
     try:
-        # 📝 FINAL POST FORMAT
+        # 📝 SAME POST (caption safe)
         final_post = f"""🔥 DEAL ALERT 🔥
 
 🛒 Product Link:
 {new_text}
 
 ⚡ Hurry Up! Limited Time Offer
-💰 Best Price Guaranteed
+💰 Best Price Guaranteed"""
 
-👉 Buy Now Fast ⬇️"""
+        final_post = final_post[:1000]  # caption limit safe
 
-        # ❌ preview OFF
-        context.bot.send_message(
-            chat_id=CHANNEL_ID,
-            text=final_post,
-            disable_web_page_preview=True
-        )
-
-        # 🖼 image নিচে
         image_sent = False
 
+        # ✅ যদি original image থাকে
         if msg.photo:
             context.bot.send_photo(
                 chat_id=CHANNEL_ID,
-                photo=msg.photo[-1].file_id
+                photo=msg.photo[-1].file_id,
+                caption=final_post,
+                disable_web_page_preview=True
             )
             image_sent = True
 
+        # ✅ না থাকলে Amazon থেকে image আনবে
         if not image_sent:
             for link in found_links:
                 img = get_amazon_image(link)
                 if img:
                     context.bot.send_photo(
                         chat_id=CHANNEL_ID,
-                        photo=img
+                        photo=img,
+                        caption=final_post,
+                        disable_web_page_preview=True
                     )
+                    image_sent = True
                     break
+
+        # ✅ fallback (image না পেলে text only)
+        if not image_sent:
+            context.bot.send_message(
+                chat_id=CHANNEL_ID,
+                text=final_post,
+                disable_web_page_preview=True
+            )
 
     except Exception as e:
         print("Error:", e)
