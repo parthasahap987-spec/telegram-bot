@@ -8,7 +8,7 @@ CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
 
-# 🔁 Short link expand
+# 🔁 Strong short link expand (ALL TYPES)
 def expand_url(url):
     try:
         session = requests.Session()
@@ -23,7 +23,7 @@ def expand_url(url):
         return url
 
 
-# 🔗 Affiliate link বানানো
+# 🔗 Clean affiliate link
 def make_affiliate(url):
     try:
         url = re.sub(r'([&?])tag=[^&]+', '', url)
@@ -62,7 +62,7 @@ def get_amazon_image(url):
     return None
 
 
-# 🤖 AUTO FORMAT FUNCTION
+# 🤖 AUTO FORMAT
 def format_post(text, affiliate_link):
     lines = text.split("\n")
 
@@ -124,9 +124,11 @@ def handle(update: Update, context: CallbackContext):
     def replace_link(match):
         link = match.group(0)
 
-        if "amazon" in link or "amzn.to" in link:
+        # 🔥 ALL Amazon / short link detect
+        if any(x in link for x in ["amazon.", "amzn"]):
 
-            if "amzn.to" in link:
+            # 🔁 expand any short link
+            if "amzn" in link:
                 link = expand_url(link)
 
             aff = make_affiliate(link)
@@ -140,7 +142,7 @@ def handle(update: Update, context: CallbackContext):
     try:
         affiliate_link = found_links[0] if found_links else ""
 
-        # 🔥 AUTO FORMAT
+        # 🔥 AUTO FORMAT POST
         final_post = format_post(new_text, affiliate_link)
 
         image_sent = False
@@ -155,7 +157,7 @@ def handle(update: Update, context: CallbackContext):
             )
             image_sent = True
 
-        # ✅ Amazon image auto
+        # ✅ Amazon image auto fetch
         if not image_sent:
             for link in found_links:
                 img = get_amazon_image(link)
