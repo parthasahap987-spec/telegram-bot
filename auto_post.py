@@ -4,7 +4,7 @@ import io
 from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
-BOT_TOKEN = "8799971120:AAHlHlFBghuS73mBBaUI27PA1Ih45f1NhCw"
+BOT_TOKEN = "8645119625:AAEvq6jj9kd35a2HsKTCBUTn4svgLzY8MDg"
 CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
