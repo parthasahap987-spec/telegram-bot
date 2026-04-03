@@ -8,7 +8,7 @@ CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
 
-# 🔁 Strong short link expand
+# 🔁 Short link expand
 def expand_url(url):
     try:
         session = requests.Session()
@@ -17,19 +17,13 @@ def expand_url(url):
         })
 
         res = session.get(url, allow_redirects=True, timeout=10)
-        final_url = res.url
-
-        match = re.search(r'(https://www\.amazon\.[^ ]+)', final_url)
-        if match:
-            return match.group(1)
-
-        return final_url
+        return res.url
 
     except:
         return url
 
 
-# 🔗 Clean affiliate বানানো
+# 🔗 Affiliate link বানানো
 def make_affiliate(url):
     try:
         url = re.sub(r'([&?])tag=[^&]+', '', url)
@@ -68,6 +62,55 @@ def get_amazon_image(url):
     return None
 
 
+# 🤖 AUTO FORMAT FUNCTION
+def format_post(text, affiliate_link):
+    lines = text.split("\n")
+
+    product = ""
+    price = ""
+    offers = []
+
+    for line in lines:
+        l = line.lower()
+
+        if "₹" in line or "rs" in l:
+            price = line.strip()
+
+        elif "off" in l or "coupon" in l or "card" in l:
+            offers.append("✔ " + line.strip())
+
+        elif len(line) > 20 and not product:
+            product = line.strip()
+
+    if not product:
+        product = lines[0]
+
+    if not price:
+        price = "Best Price Available"
+
+    if not offers:
+        offers = ["✔ Extra Discount Available"]
+
+    offer_text = "\n".join(offers)
+
+    final = f"""🔥 DEAL ALERT 🔥
+
+💥 Grab Now 💥
+
+🛒 {product}
+💰 {price}
+
+🎯 Offers:
+{offer_text}
+
+👉 BUY NOW 👇  
+{affiliate_link}
+
+⚡ Hurry! Limited Time Deal"""
+
+    return final[:1000]
+
+
 # 🤖 MAIN
 def handle(update: Update, context: CallbackContext):
     msg = update.message
@@ -95,20 +138,14 @@ def handle(update: Update, context: CallbackContext):
     new_text = re.sub(r'https?://[^\s]+', replace_link, text)
 
     try:
-        # 📝 SAME POST (caption safe)
-        final_post = f"""🔥 DEAL ALERT 🔥
+        affiliate_link = found_links[0] if found_links else ""
 
-🛒 Product Link:
-{new_text}
-
-⚡ Hurry Up! Limited Time Offer
-💰 Best Price Guaranteed"""
-
-        final_post = final_post[:1000]  # caption limit safe
+        # 🔥 AUTO FORMAT
+        final_post = format_post(new_text, affiliate_link)
 
         image_sent = False
 
-        # ✅ যদি original image থাকে
+        # ✅ image + caption same post
         if msg.photo:
             context.bot.send_photo(
                 chat_id=CHANNEL_ID,
@@ -118,7 +155,7 @@ def handle(update: Update, context: CallbackContext):
             )
             image_sent = True
 
-        # ✅ না থাকলে Amazon থেকে image আনবে
+        # ✅ Amazon image auto
         if not image_sent:
             for link in found_links:
                 img = get_amazon_image(link)
@@ -132,7 +169,7 @@ def handle(update: Update, context: CallbackContext):
                     image_sent = True
                     break
 
-        # ✅ fallback (image না পেলে text only)
+        # ✅ fallback text
         if not image_sent:
             context.bot.send_message(
                 chat_id=CHANNEL_ID,
