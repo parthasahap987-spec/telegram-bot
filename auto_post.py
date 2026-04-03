@@ -3,7 +3,7 @@ import requests
 from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
-BOT_TOKEN = "NEW_TOKEN_DAO"   # 🔴 নতুন token use করো
+BOT_TOKEN = "8645119625:AAHLcrsVzJzaBwsSRAO3OIoXFlUAVwnrmr8"   # 🔴 নতুন token use করো
 CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
 
