@@ -4,12 +4,36 @@ import io
 from telegram import Update
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
+# 🔑 CONFIG
 BOT_TOKEN = "8645119625:AAEvq6jj9kd35a2HsKTCBUTn4svgLzY8MDg"
 CHANNEL_ID = -1002161382456
 AFFILIATE_TAG = "partha07e-21"
+BITLY_TOKEN = "e3df1684c678e66ab90b1a3746f57852e4b3eff0"
+
+# 🔗 Bitly Short Link
+def shorten_link(url):
+    try:
+        headers = {
+            "Authorization": f"Bearer {BITLY_TOKEN}",
+            "Content-Type": "application/json"
+        }
+
+        data = {"long_url": url}
+
+        res = requests.post(
+            "https://api-ssl.bitly.com/v4/shorten",
+            json=data,
+            headers=headers,
+            timeout=10
+        )
+
+        return res.json().get("link", url)
+
+    except:
+        return url
 
 
-# 🔁 Expand ANY short link
+# 🔁 Expand short links
 def expand_url(url):
     try:
         session = requests.Session()
@@ -20,7 +44,7 @@ def expand_url(url):
         return url
 
 
-# 🔗 Clean Amazon affiliate link (FIXED)
+# 🔗 Amazon affiliate link
 def make_affiliate(url):
     try:
         match = re.search(r'(https://www\.amazon\.[^/]+/dp/[A-Z0-9]+)', url)
@@ -67,7 +91,7 @@ def get_amazon_image(url):
     return None
 
 
-# 📸 Send image (download → upload fix)
+# 📸 Send image
 def send_image(context, chat_id, img_url, caption):
     try:
         res = requests.get(img_url, stream=True, timeout=10)
@@ -88,7 +112,7 @@ def send_image(context, chat_id, img_url, caption):
     return False
 
 
-# 🤖 Auto format পোস্ট
+# 🧾 Format post
 def format_post(text, affiliate_link):
     lines = text.split("\n")
 
@@ -141,12 +165,7 @@ def format_post(text, affiliate_link):
 def handle(update: Update, context: CallbackContext):
     msg = update.message
 
-    # ✅ TEXT FIX (caption priority)
-    text = ""
-    if msg.caption:
-        text = msg.caption
-    elif msg.text:
-        text = msg.text
+    text = msg.caption if msg.caption else msg.text if msg.text else ""
 
     if text.strip() == "":
         return
@@ -156,7 +175,6 @@ def handle(update: Update, context: CallbackContext):
     def replace_link(match):
         link = match.group(0)
 
-        # 🔥 detect all amazon links
         if any(x in link for x in ["amazon.", "amzn"]):
 
             if "amzn" in link:
@@ -173,11 +191,15 @@ def handle(update: Update, context: CallbackContext):
     try:
         affiliate_link = found_links[0] if found_links else ""
 
+        # 🔥 Bitly Short Link
+        if affiliate_link:
+            affiliate_link = shorten_link(affiliate_link)
+
         final_post = format_post(new_text, affiliate_link)
 
         image_sent = False
 
-        # ✅ PHOTO
+        # 📸 Telegram image
         if msg.photo:
             context.bot.send_photo(
                 chat_id=CHANNEL_ID,
@@ -187,7 +209,6 @@ def handle(update: Update, context: CallbackContext):
             )
             image_sent = True
 
-        # ✅ DOCUMENT IMAGE
         elif msg.document and msg.document.mime_type and msg.document.mime_type.startswith("image"):
             context.bot.send_photo(
                 chat_id=CHANNEL_ID,
@@ -197,7 +218,7 @@ def handle(update: Update, context: CallbackContext):
             )
             image_sent = True
 
-        # ✅ AMAZON IMAGE FETCH
+        # 🖼 Amazon image fetch
         if not image_sent:
             for link in found_links:
                 img = get_amazon_image(link)
@@ -206,7 +227,7 @@ def handle(update: Update, context: CallbackContext):
                         image_sent = True
                         break
 
-        # ✅ FALLBACK TEXT
+        # fallback
         if not image_sent:
             context.bot.send_message(
                 chat_id=CHANNEL_ID,
