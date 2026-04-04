@@ -1,7 +1,7 @@
 import requests
 import time
 import random
-import xml.etree.ElementTree as ET
+import re
 from telegram import Bot
 
 # 🔑 CONFIG
@@ -37,29 +37,29 @@ def shorten_bitly(url):
         return url
 
 
-# 🟢 RSS Deal Fetch (WORKING)
+# 🟢 DEAL FETCH (NO XML ERROR)
 def get_deals():
     url = "https://rss.app/feeds/_bJ7ZPz0sQZ6g6x0M.xml"
 
     try:
         res = requests.get(url, timeout=10)
+        text = res.text
     except:
-        print("❌ RSS fetch failed")
+        print("❌ Fetch failed")
         return []
 
-    root = ET.fromstring(res.content)
+    # extract all links using regex
+    links = re.findall(r"<link>(.*?)</link>", text)
 
-    deals = []
+    clean_links = []
 
-    for item in root.findall(".//item"):
-        link = item.find("link").text
+    for link in links:
+        if link.startswith("http") and link not in posted_links:
+            clean_links.append(link)
 
-        if link not in posted_links:
-            deals.append(link)
+    print("✅ Deals found:", len(clean_links))
 
-    print("✅ Deals found:", len(deals))
-
-    return deals[:5]
+    return clean_links[:5]
 
 
 # 📢 Telegram Post
@@ -86,7 +86,7 @@ def post_to_telegram(links):
 
 
 # 🚀 START
-print("🚀 BOT STARTED (RSS MODE)")
+print("🚀 BOT STARTED (FINAL FIX)")
 
 while True:
     try:
