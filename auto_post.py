@@ -41,7 +41,7 @@ except Exception as e:
     return None
 ```
 
-# 🔁 Backup Short Link (TinyURL)
+# 🔁 Backup Short Link
 
 def shorten_backup(url):
 try:
@@ -114,7 +114,7 @@ except:
 return None
 ```
 
-# 📸 send image
+# 📸 Send image
 
 def send_image(bot, chat_id, img_url, caption, button):
 try:
@@ -136,7 +136,7 @@ except:
 return False
 ```
 
-# 🧾 format
+# 🧾 Format post
 
 def format_post(text, link):
 return f"""🔥 DEAL ALERT 🔥
@@ -150,7 +150,7 @@ return f"""🔥 DEAL ALERT 🔥
 
 ⚡ Limited Time Deal"""
 
-# 🤖 MAIN
+# 🤖 MAIN HANDLER
 
 def handle(update: Update, context: CallbackContext):
 msg = update.message
@@ -166,14 +166,14 @@ def replace_link(match):
     nonlocal found_link
     link = match.group(0)
 
-    # 🔓 Expand ANY short link
+    # 🔓 Expand any short link
     link = expand_url(link)
 
-    # 🛒 Amazon হলে affiliate add
+    # 🛒 Amazon affiliate
     if "amazon." in link:
         link = make_amazon_affiliate(link)
 
-    # ✅ ANY link accept
+    # ✅ Accept all links
     found_link = link
     return link
 
@@ -182,22 +182,22 @@ new_text = re.sub(r'https?://[^\s]+', replace_link, text)
 if not found_link:
     return
 
-# ❌ duplicate block
+# ❌ Duplicate block
 if found_link in posted_links:
     return
 posted_links.add(found_link)
 
-# 🔗 short link (Bitly)
+# 🔗 Short link
 short_link = shorten_link(found_link)
 
-# 🔘 button
+# 🔘 Button
 button = InlineKeyboardMarkup([
     [InlineKeyboardButton("🔥 Buy Now", url=short_link)]
 ])
 
 final_post = format_post(new_text, short_link)
 
-# 📤 send
+# 📤 Send
 for ch in CHANNELS:
 
     image_sent = False
@@ -230,15 +230,19 @@ for ch in CHANNELS:
 
 def main():
 updater = Updater(BOT_TOKEN, use_context=True)
-dp = updater.dispatcher
 
 ```
+# 🔥 FIX conflict issue
+updater.bot.delete_webhook(drop_pending_updates=True)
+
+dp = updater.dispatcher
+
 dp.add_handler(MessageHandler(
     Filters.text | Filters.caption | Filters.photo,
     handle
 ))
 
-print("🔥 Bot Running (ALL LINKS + Bitly)...")
+print("🔥 Bot Running (ALL LINKS + Bitly + FIXED)...")
 updater.start_polling()
 updater.idle()
 ```
