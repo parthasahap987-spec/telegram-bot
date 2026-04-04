@@ -1,36 +1,58 @@
 import re
 import requests
 import io
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, MessageHandler, Filters, CallbackContext
 
 # 🔑 CONFIG
 BOT_TOKEN = "8645119625:AAHBcJMUee_d3s6rNRzhTZ2bNFLGyhcl_sI"
-CHANNEL_ID = -1002161382456
+CHANNELS = [-1002161382456]
 AFFILIATE_TAG = "partha07e-21"
 BITLY_TOKEN = "e3df1684c678e66ab90b1a3746f57852e4b3eff0"
 
+posted_links = set()
+
 # 🔗 Bitly Short Link
-def shorten_link(url):
+def shorten_bitly(url):
     try:
         headers = {
             "Authorization": f"Bearer {BITLY_TOKEN}",
             "Content-Type": "application/json"
         }
 
-        data = {"long_url": url}
-
         res = requests.post(
             "https://api-ssl.bitly.com/v4/shorten",
-            json=data,
+            json={"long_url": url},
             headers=headers,
             timeout=10
         )
 
-        return res.json().get("link", url)
+        if res.status_code == 200:
+            return res.json()["link"]
+        else:
+            print("Bitly Error:", res.text)
+            return None
 
+    except Exception as e:
+        print("Bitly Exception:", e)
+        return None
+
+
+# 🔁 Backup Short Link (TinyURL)
+def shorten_backup(url):
+    try:
+        res = requests.get(f"http://tinyurl.com/api-create.php?url={url}", timeout=10)
+        return res.text
     except:
         return url
+
+
+# 🔗 Final Shortener
+def shorten_link(url):
+    short = shorten_bitly(url)
+    if short:
+        return short
+    return shorten_backup(url)
 
 
 # 🔁 Expand short links
@@ -44,23 +66,21 @@ def expand_url(url):
         return url
 
 
-# 🔗 Amazon affiliate link
-def make_affiliate(url):
+# 🔗 Amazon affiliate
+def make_amazon_affiliate(url):
     try:
         match = re.search(r'(https://www\.amazon\.[^/]+/dp/[A-Z0-9]+)', url)
-
         if match:
-            clean_url = match.group(1)
+            clean = match.group(1)
         else:
-            clean_url = url.split("?")[0]
+            clean = url.split("?")[0]
 
-        return clean_url + "?tag=" + AFFILIATE_TAG
-
+        return clean + "?tag=" + AFFILIATE_TAG
     except:
         return url
 
 
-# 🖼 Get Amazon image
+# 🖼 Amazon image
 def get_amazon_image(url):
     try:
         headers = {
@@ -72,171 +92,126 @@ def get_amazon_image(url):
 
         patterns = [
             r'<meta property="og:image" content="([^"]+)"',
-            r'"hiRes":"([^"]+)"',
-            r'"large":"([^"]+)"',
-            r'"mainUrl":"([^"]+)"'
+            r'"hiRes":"([^"]+)"'
         ]
 
         for p in patterns:
             match = re.search(p, html)
             if match:
-                img = match.group(1)
-                img = img.replace("\\u0026", "&").replace("\\", "")
+                img = match.group(1).replace("\\", "")
                 if img.startswith("http"):
                     return img
-
     except:
         pass
 
     return None
 
 
-# 📸 Send image
-def send_image(context, chat_id, img_url, caption):
+# 📸 send image
+def send_image(bot, chat_id, img_url, caption, button):
     try:
         res = requests.get(img_url, stream=True, timeout=10)
         if res.status_code == 200:
-            image_bytes = io.BytesIO(res.content)
-            image_bytes.name = "product.jpg"
+            img = io.BytesIO(res.content)
+            img.name = "product.jpg"
 
-            context.bot.send_photo(
+            bot.send_photo(
                 chat_id=chat_id,
-                photo=image_bytes,
+                photo=img,
                 caption=caption,
-                disable_web_page_preview=True
+                reply_markup=button
             )
             return True
     except:
         return False
-
     return False
 
 
-# 🧾 Format post
-def format_post(text, affiliate_link):
-    lines = text.split("\n")
-
-    product = ""
-    price = ""
-    offers = []
-
-    for line in lines:
-        l = line.lower()
-
-        if "₹" in line or "rs" in l:
-            price = line.strip()
-
-        elif "off" in l or "coupon" in l or "card" in l:
-            offers.append("✔ " + line.strip())
-
-        elif len(line) > 20 and not product:
-            product = line.strip()
-
-    if not product:
-        product = lines[0]
-
-    if not price:
-        price = "Best Price Available"
-
-    if not offers:
-        offers = ["✔ Extra Discount Available"]
-
-    offer_text = "\n".join(offers)
-
-    final = f"""🔥 DEAL ALERT 🔥
+# 🧾 format
+def format_post(text, link):
+    return f"""🔥 DEAL ALERT 🔥
 
 💥 Grab Now 💥
 
-🛒 {product}
-💰 {price}
+🛒 {text.splitlines()[0]}
 
-🎯 Offers:
-{offer_text}
+👉 BUY NOW 👇
+{link}
 
-👉 BUY NOW 👇  
-{affiliate_link}
-
-⚡ Hurry! Limited Time Deal"""
-
-    return final[:1000]
+⚡ Limited Time Deal"""
 
 
-# 🤖 MAIN HANDLER
+# 🤖 MAIN
 def handle(update: Update, context: CallbackContext):
     msg = update.message
-
     text = msg.caption if msg.caption else msg.text if msg.text else ""
 
-    if text.strip() == "":
+    if not text.strip():
         return
 
-    found_links = []
+    found_link = ""
 
     def replace_link(match):
+        nonlocal found_link
         link = match.group(0)
 
-        if any(x in link for x in ["amazon.", "amzn"]):
-
+        if "amazon." in link or "amzn" in link:
             if "amzn" in link:
                 link = expand_url(link)
 
-            aff = make_affiliate(link)
-            found_links.append(aff)
+            aff = make_amazon_affiliate(link)
+            found_link = aff
             return aff
 
         return link
 
     new_text = re.sub(r'https?://[^\s]+', replace_link, text)
 
-    try:
-        affiliate_link = found_links[0] if found_links else ""
+    if not found_link:
+        return
 
-        # 🔥 Bitly Short Link
-        if affiliate_link:
-            affiliate_link = shorten_link(affiliate_link)
+    # ❌ duplicate block
+    if found_link in posted_links:
+        return
+    posted_links.add(found_link)
 
-        final_post = format_post(new_text, affiliate_link)
+    # 🔗 short link
+    short_link = shorten_link(found_link)
+
+    # 🔘 button
+    button = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔥 Buy Now", url=short_link)]
+    ])
+
+    final_post = format_post(new_text, short_link)
+
+    # 📤 send
+    for ch in CHANNELS:
 
         image_sent = False
 
-        # 📸 Telegram image
         if msg.photo:
             context.bot.send_photo(
-                chat_id=CHANNEL_ID,
+                chat_id=ch,
                 photo=msg.photo[-1].file_id,
                 caption=final_post,
-                disable_web_page_preview=True
+                reply_markup=button
             )
             image_sent = True
 
-        elif msg.document and msg.document.mime_type and msg.document.mime_type.startswith("image"):
-            context.bot.send_photo(
-                chat_id=CHANNEL_ID,
-                photo=msg.document.file_id,
-                caption=final_post,
-                disable_web_page_preview=True
-            )
-            image_sent = True
-
-        # 🖼 Amazon image fetch
         if not image_sent:
-            for link in found_links:
-                img = get_amazon_image(link)
-                if img:
-                    if send_image(context, CHANNEL_ID, img, final_post):
-                        image_sent = True
-                        break
+            img = get_amazon_image(found_link)
+            if img:
+                if send_image(context.bot, ch, img, final_post, button):
+                    image_sent = True
 
-        # fallback
         if not image_sent:
             context.bot.send_message(
-                chat_id=CHANNEL_ID,
+                chat_id=ch,
                 text=final_post,
+                reply_markup=button,
                 disable_web_page_preview=True
             )
-
-    except Exception as e:
-        print("Error:", e)
 
 
 # 🚀 RUN
@@ -245,11 +220,11 @@ def main():
     dp = updater.dispatcher
 
     dp.add_handler(MessageHandler(
-        Filters.text | Filters.caption | Filters.photo | Filters.document,
+        Filters.text | Filters.caption | Filters.photo,
         handle
     ))
 
-    print("Bot Running 🚀")
+    print("🔥 Bot Running (Bitly + Backup)...")
     updater.start_polling()
     updater.idle()
 
