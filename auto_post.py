@@ -1,6 +1,5 @@
 import requests
 import time
-import re
 from bs4 import BeautifulSoup
 from telegram import Bot
 
@@ -26,7 +25,8 @@ def shorten_bitly(url):
         res = requests.post(
             "https://api-ssl.bitly.com/v4/shorten",
             json=data,
-            headers=headers
+            headers=headers,
+            timeout=10
         )
 
         if res.status_code == 200:
@@ -38,32 +38,27 @@ def shorten_bitly(url):
         return url
 
 
-# 🛒 Flipkart Deals Fetch
-def get_flipkart_deals():
-    url = "https://www.flipkart.com/offers-store"
+# 🟢 EarnKaro Deals Fetch
+def get_deals():
+    url = "https://earnkaro.com/store/flipkart"
     headers = {"User-Agent": "Mozilla/5.0"}
 
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, "html.parser")
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+    except:
+        print("Deal site error")
+        return []
+
+    soup = BeautifulSoup(res.text, "html.parser")
 
     deals = []
 
-    for item in soup.select("a._1fQZEK"):
-        try:
-            link = "https://www.flipkart.com" + item.get("href")
+    for a in soup.find_all("a", href=True):
+        link = a["href"]
 
-            title_tag = item.select_one("._4rR01T")
-            price_tag = item.select_one("._30jeq3")
-            old_price_tag = item.select_one("._3I9_wc")
-
-            title = title_tag.text if title_tag else "Product"
-            price = price_tag.text if price_tag else ""
-            old_price = old_price_tag.text if old_price_tag else ""
-
-            deals.append((title, price, old_price, link))
-
-        except:
-            continue
+        # Only Flipkart links
+        if "flipkart" in link.lower():
+            deals.append(("🔥 Flipkart Deal", "", "", link))
 
     return deals
 
@@ -77,10 +72,7 @@ def post_to_telegram(deals):
 
         short_link = shorten_bitly(link)
 
-        msg = f"""🔥 Flipkart Deal
-
-🛍 {title}
-💰 {price} ~~{old_price}~~
+        msg = f"""{title}
 
 👉 Buy Now: {short_link}
 """
@@ -88,7 +80,7 @@ def post_to_telegram(deals):
         try:
             bot.send_message(chat_id=CHANNEL_ID, text=msg)
             posted_links.add(link)
-            print("Posted:", title)
+            print("Posted:", link)
             time.sleep(2)
 
         except Exception as e:
@@ -98,7 +90,7 @@ def post_to_telegram(deals):
 # 🔁 MAIN LOOP
 while True:
     try:
-        deals = get_flipkart_deals()
+        deals = get_deals()
 
         if deals:
             post_to_telegram(deals)
