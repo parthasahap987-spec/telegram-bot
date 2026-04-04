@@ -1,12 +1,12 @@
 import requests
 import time
 import random
-from bs4 import BeautifulSoup
+import xml.etree.ElementTree as ET
 from telegram import Bot
 
 # 🔑 CONFIG
 BOT_TOKEN = "8645119625:AAEnBkJ5ND1z06BS9ui4YX_nkFJ8kwLgFY0"
-CHANNEL_ID = -1002161382456   # private hole -100xxxx
+CHANNEL_ID = -1002161382456
 BITLY_TOKEN = "e3df1684c678e66ab90b1a3746f57852e4b3eff0"
 
 bot = Bot(token=BOT_TOKEN)
@@ -37,55 +37,40 @@ def shorten_bitly(url):
         return url
 
 
-# 🟢 Deal Fetch (Improved Filter)
+# 🟢 RSS Deal Fetch (WORKING)
 def get_deals():
-    url = "https://earnkaro.com/store/flipkart"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    url = "https://rss.app/feeds/_bJ7ZPz0sQZ6g6x0M.xml"
 
     try:
-        res = requests.get(url, headers=headers, timeout=10)
+        res = requests.get(url, timeout=10)
     except:
-        print("❌ Fetch failed")
+        print("❌ RSS fetch failed")
         return []
 
-    soup = BeautifulSoup(res.text, "html.parser")
+    root = ET.fromstring(res.content)
 
-    links = []
+    deals = []
 
-    for a in soup.find_all("a", href=True):
-        link = a["href"]
+    for item in root.findall(".//item"):
+        link = item.find("link").text
 
-        # only valid external product-like links
-        if link.startswith("http") and not any(x in link for x in [
-            "earnkaro", "facebook", "twitter", "instagram", "youtube"
-        ]):
-            links.append(link)
+        if link not in posted_links:
+            deals.append(link)
 
-    # remove duplicate
-    links = list(set(links))
+    print("✅ Deals found:", len(deals))
 
-    print(f"✅ Found {len(links)} links")
-
-    return links[:8]   # limit
+    return deals[:5]
 
 
-# 📢 Telegram Post (Better format)
+# 📢 Telegram Post
 def post_to_telegram(links):
     for link in links:
 
-        if link in posted_links:
-            continue
-
         short_link = shorten_bitly(link)
 
-        msg = f"""🔥 HOT DEAL ALERT 🔥
+        msg = f"""🔥 HOT DEAL
 
-🛍 Limited Time Offer
-💸 Grab Now Before Price Increases!
-
-👉 {short_link}
-
-#flipkart #deals #shopping
+👉 Buy Now: {short_link}
 """
 
         try:
@@ -94,14 +79,14 @@ def post_to_telegram(links):
 
             print("✅ Posted:", short_link)
 
-            time.sleep(random.randint(2,5))  # safe delay
+            time.sleep(random.randint(2,5))
 
         except Exception as e:
             print("❌ Telegram Error:", e)
 
 
 # 🚀 START
-print("🚀 PRO BOT STARTED...")
+print("🚀 BOT STARTED (RSS MODE)")
 
 while True:
     try:
@@ -110,9 +95,9 @@ while True:
         if deals:
             post_to_telegram(deals)
         else:
-            print("⚠️ No deals found")
+            print("⚠️ No deals")
 
-        print("⏳ Waiting next cycle...\n")
+        print("⏳ Waiting...\n")
         time.sleep(1800)
 
     except Exception as e:
